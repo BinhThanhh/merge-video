@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MergeVideoTool - Ghép Video & Chèn Chữ Nền Trắng</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Montserrat:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Top Navigation Bar -->
+        <header class="navbar">
+            <div class="nav-left">
+                <div class="brand-badge">
+                    <span class="brand-icon">⚡</span>
+                    <span class="brand-title">MergeVideoTool</span>
+                    <span class="brand-sub">Batch Video Merger</span>
+                </div>
+            </div>
+
+            <div class="nav-center">
+                <div class="project-summary" id="projectSummary">
+                    <span class="summary-pill"><i class="icon-film">🎬</i> <span id="clipCountText">0 video</span></span>
+                    <span class="summary-pill"><i class="icon-clock">⏱️</i> <span id="totalDurationText">00:00</span></span>
+                    <span class="summary-pill"><i class="icon-canvas">📐</i> <span id="canvasSummaryText">9:16 (Auto)</span></span>
+                </div>
+            </div>
+
+            <div class="nav-right">
+                <button class="btn btn-secondary" id="btnWebhookApi" title="Mở cấu hình Máy Chủ Webhook API & Tự Động Hóa">
+                    <span class="btn-icon">🔌</span> Webhook API
+                </button>
+                <button class="btn btn-secondary" id="btnOpenFolder" title="Mở thư mục chứa video đã xuất">
+                    <span class="btn-icon">📁</span> Thư Mục Xuất
+                </button>
+                <button class="btn btn-primary" id="btnExportVideo" title="Bắt đầu ghép video và chèn chữ">
+                    <span class="btn-icon">🚀</span> Ghép & Xuất Video
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body Grid -->
+        <main class="main-container">
+            <!-- Left Panel: Video Management & Canvas Settings -->
+            <aside class="panel left-panel">
+                <!-- Panel Tabs Switcher -->
+                <div class="panel-tabs-bar">
+                    <button type="button" class="panel-tab-btn active" id="tabBtnClips">
+                        <span class="tab-icon">🎞️</span>
+                        <span>Danh Sách Video</span>
+                        <span class="tab-badge" id="tabBadgeClips">0</span>
+                    </button>
+                    <button type="button" class="panel-tab-btn" id="tabBtnSettings">
+                        <span class="tab-icon">⚙️</span>
+                        <span>Cài Đặt Xuất</span>
+                    </button>
+                </div>
+
+                <!-- TAB 1: Danh Sách Video (Full Height dedicated view) -->
+                <div class="tab-content-panel active" id="tabPanelClips">
+                    <!-- Action Bar -->
+                    <div class="clips-top-bar">
+                        <button class="btn btn-accent btn-sm btn-block" id="btnBrowseFiles" title="Mở cửa sổ chọn video trực tiếp trên máy tính">
+                            <span class="btn-icon">📂</span> Thêm Video Từ Máy Tính
+                        </button>
+                        <input type="file" id="fileUploadInput" multiple accept="video/*" style="display: none;">
+
+                        <!-- Compact Dropzone -->
+                        <div class="compact-dropzone" id="dropzone">
+                            <span class="compact-drop-icon">📥</span>
+                            <span class="compact-drop-text">Kéo thả file video vào đây</span>
+                        </div>
+                    </div>
+
+                    <!-- Clips Stats Subheader -->
+                    <div class="clips-stats-bar">
+                        <span id="clipsStatsText">Đang có 0 video</span>
+                        <span class="stats-total-dur" id="clipsTotalDurText">00:00</span>
+                    </div>
+
+                    <!-- Full-height Clip Playlist -->
+                    <div class="clips-container" id="clipsList">
+                        <div class="empty-state" id="emptyState">
+                            <div class="empty-icon">🎬</div>
+                            <div class="empty-title">Chưa có video nào</div>
+                            <div class="empty-desc">Nhấn "Thêm Video" hoặc kéo thả file vào khung bên trên</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Cài Đặt Ghép & Xuất Video (Clean, Spacious View) -->
+                <div class="tab-content-panel" id="tabPanelSettings" style="display: none;">
+                    <div class="settings-scroll-container">
+                        <!-- Batch Merge Mode Options -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">🧩 Chế Độ Ghép Video</span>
+                            </div>
+                            <div class="radio-group-mode">
+                                <label class="radio-card">
+                                    <input type="radio" name="mergeMode" value="single" checked>
+                                    <div class="radio-card-content">
+                                        <span class="radio-card-title">Ghép tất cả vào 1 video</span>
+                                        <span class="radio-card-desc">Nối toàn bộ danh sách thành 1 file duy nhất</span>
+                                    </div>
+                                </label>
+                                <label class="radio-card">
+                                    <input type="radio" name="mergeMode" value="batch">
+                                    <div class="radio-card-content">
+                                        <span class="radio-card-title">Ghép hàng loạt theo nhóm N video</span>
+                                        <span class="radio-card-desc">Cứ mỗi N clip ghép thành 1 video xuất riêng</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <!-- Batch Settings (Visible when batch selected) -->
+                            <div class="batch-settings-box" id="batchSettingsBox" style="display: none;">
+                                <div class="form-group">
+                                    <div class="slider-header">
+                                        <label class="form-label" for="chunkSizeInput">Số lượng video ghép mỗi file (N)</label>
+                                        <span class="batch-num-tag" id="chunkSizeDisplay">2 clip / video</span>
+                                    </div>
+                                    <div class="counter-input-row">
+                                        <button type="button" class="btn-counter" id="btnChunkMinus">−</button>
+                                        <input type="number" id="chunkSizeInput" class="form-input text-center" min="1" max="50" value="2">
+                                        <button type="button" class="btn-counter" id="btnChunkPlus">+</button>
+                                    </div>
+                                    <div class="quick-chunk-btns">
+                                        <button type="button" class="chunk-chip" data-chunk="2">2 clip</button>
+                                        <button type="button" class="chunk-chip" data-chunk="3">3 clip</button>
+                                        <button type="button" class="chunk-chip" data-chunk="4">4 clip</button>
+                                        <button type="button" class="chunk-chip" data-chunk="5">5 clip</button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="selectRemainder">Xử lý các clip dư cuối cùng</label>
+                                    <select id="selectRemainder" class="form-select">
+                                        <option value="merge" selected>Ghép các clip dư thành 1 video riêng</option>
+                                        <option value="skip">Bỏ qua các clip dư không đủ N video</option>
+                                    </select>
+                                </div>
+
+                                <div class="batch-preview-pill" id="batchSummaryPill">
+                                    📦 Dự kiến xuất: <span>0 video riêng biệt</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Canvas & Output Dimensions Card -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">📐 Kích Thước Video Xuất (Tự Do X & Y)</span>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <div class="custom-res-row">
+                                        <div class="res-input-col">
+                                            <span class="form-label-sub">Rộng X (Width)</span>
+                                            <div class="input-with-unit">
+                                                <input type="number" id="inputVideoWidth" class="form-input" value="720" min="100" max="7680" step="2">
+                                                <span class="unit-tag">px</span>
+                                            </div>
+                                        </div>
+                                        <div class="res-divider">✕</div>
+                                        <div class="res-input-col">
+                                            <span class="form-label-sub">Cao Y (Height)</span>
+                                            <div class="input-with-unit">
+                                                <input type="number" id="inputVideoHeight" class="form-input" value="1280" min="100" max="7680" step="2">
+                                                <span class="unit-tag">px</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="res-chips-row">
+                                        <button type="button" class="res-chip" data-mode="original" id="chipResOriginal">Video gốc</button>
+                                        <button type="button" class="res-chip active" data-w="720" data-h="1280">720 × 1280</button>
+                                        <button type="button" class="res-chip" data-w="1080" data-h="1920">1080 × 1920</button>
+                                        <button type="button" class="res-chip" data-w="1920" data-h="1080">1920 × 1080</button>
+                                        <button type="button" class="res-chip" data-w="1080" data-h="1080">1080 × 1080</button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="selectFitMode">Chế độ khớp khung</label>
+                                    <select id="selectFitMode" class="form-select">
+                                        <option value="contain" selected>Chứa vừa (Thêm viền đen - Giữ trọn nội dung)</option>
+                                        <option value="cover">Cắt vừa khung (Phóng to tràn khung)</option>
+                                        <option value="stretch">Kéo giãn tự do X & Y (Khớp đúng kích cỡ X-Y, không viền)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quality & File Naming Card -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">🚀 Chất Lượng & Đặt Tên File</span>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label class="form-label" for="selectQuality">Chất lượng video xuất</label>
+                                    <select id="selectQuality" class="form-select">
+                                        <option value="0" selected>Giữ nguyên chất lượng gốc (Khuyên dùng - bitrate, fps, âm thanh y hệt video gốc)</option>
+                                        <option value="18">Chất lượng cực cao (Sắc nét nhất - CRF 18)</option>
+                                        <option value="22">Tiêu chuẩn CapCut (CRF 22)</option>
+                                        <option value="26">Xuất nhanh / Dung lượng nhẹ (CRF 26)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="selectUpscaleMode">✨ Tăng nét & Nâng độ phân giải</label>
+                                    <select id="selectUpscaleMode" class="form-select">
+                                        <option value="none" selected>Tắt (Off - Không dùng AI / Không làm nét)</option>
+                                        <option value="fast">Tăng nét nhanh (Lanczos + CAS - Nhẹ, mọi máy)</option>
+                                        <option value="ai" id="optUpscaleAi">AI Super-Resolution (Real-ESRGAN - Tái tạo chi tiết)</option>
+                                    </select>
+                                    <span class="label-hint" id="upscaleModeHint">Đang tắt: giữ nguyên xử lý gốc (nhanh nhất, không dùng AI làm nét).</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="sliderVolume" style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span>🔊 Âm lượng video xuất</span>
+                                        <span id="volumeValue" style="color: var(--accent-cyan); font-weight: 700;">100% (gốc)</span>
+                                    </label>
+                                    <input type="range" id="sliderVolume" class="form-slider" min="0" max="300" step="5" value="100">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                        <span class="label-hint">0% = tắt tiếng · 100% = giữ nguyên · 300% = to gấp 3</span>
+                                        <button type="button" class="tool-btn" id="btnVolumeReset" title="Đặt về âm lượng gốc"><span>🔄 100%</span></button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="sliderSpeed" style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span>⚡ Tốc độ video (Tua nhanh / Chậm)</span>
+                                        <span id="speedValue" style="color: var(--accent-cyan); font-weight: 700;">1.0x (gốc)</span>
+                                    </label>
+                                    <input type="range" id="sliderSpeed" class="form-slider" min="0.25" max="4.0" step="0.05" value="1.0">
+                                    <div class="quick-chunk-btns" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                                        <button type="button" class="chunk-chip speed-chip" data-speed="0.5">0.5x</button>
+                                        <button type="button" class="chunk-chip speed-chip active" data-speed="1">1.0x</button>
+                                        <button type="button" class="chunk-chip speed-chip" data-speed="1.25">1.25x</button>
+                                        <button type="button" class="chunk-chip speed-chip" data-speed="1.5">1.5x</button>
+                                        <button type="button" class="chunk-chip speed-chip" data-speed="2">2.0x</button>
+                                        <button type="button" class="chunk-chip speed-chip" data-speed="3">3.0x</button>
+                                        <button type="button" class="tool-btn" id="btnSpeedReset" title="Đặt về tốc độ gốc" style="margin-left: auto;"><span>🔄 1.0x</span></button>
+                                    </div>
+                                    <span class="label-hint">0.25x = chậm · 1.0x = giữ nguyên · 4.0x = tua nhanh gấp 4 (áp dụng cả xem trước &amp; xuất)</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="inputFilePrefix">Tên file xuất (Quy tắc đánh số)</label>
+                                    <input type="text" id="inputFilePrefix" class="form-input" value="export_final" placeholder="export_final">
+                                    <span class="label-hint" id="filePrefixHint" style="margin-top: 4px; color: var(--accent-cyan); font-weight: 600;">
+                                        👉 Định dạng: 1_export_final.mp4, 2_export_final.mp4...
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Panel: Interactive Live WYSIWYG Player -->
+            <section class="panel center-panel">
+                <div class="preview-header">
+                    <div class="preview-status">
+                        <span class="status-indicator"></span>
+                        <span id="currentClipName">Xem trước trực quan</span>
+                    </div>
+                    <div class="preview-tools">
+                        <button class="tool-btn" id="btnSnapCenter" title="Căn giữa màn hình">
+                            <span>🎯 Căn Giữa</span>
+                        </button>
+                        <button class="tool-btn" id="btnResetPosition" title="Đặt lại vị trí mặc định">
+                            <span>🔄 Đặt lại</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Video Viewport Frame -->
+                <div class="viewport-wrapper" id="viewportWrapper">
+                    <div class="video-container" id="videoContainer">
+                        <!-- Video Element -->
+                        <video id="previewVideo" playsinline preload="auto"></video>
+
+                        <!-- Alignment Guide Lines -->
+                        <div class="guide-line guide-h" id="guideH"></div>
+                        <div class="guide-line guide-v" id="guideV"></div>
+
+                        <!-- Draggable Interactive Text Badge Overlay -->
+                        <div class="text-overlay-badge" id="draggableBadge">
+                            <div class="badge-text-content" id="badgeTextContent">helo helo</div>
+                            <div class="badge-coords-tag" id="badgeCoordsTag">X: 50% | Y: 80%</div>
+                        </div>
+
+                        <!-- Placeholder when no video -->
+                        <div class="player-placeholder" id="playerPlaceholder">
+                            <div class="placeholder-icon">🎥</div>
+                            <div class="placeholder-title">Khu Vực Xem Trước Video</div>
+                            <div class="placeholder-subtitle">Hãy chọn video từ máy tính hoặc kéo thả vào khung bên trái</div>
+                            <button class="btn btn-accent btn-sm" id="btnEmptyBrowse">
+                                <span>📂 Chọn Video Ngay</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Player Controls -->
+                <div class="player-controls-bar">
+                    <button class="ctrl-btn" id="btnPlayPause" title="Phát / Tạm dừng (Phím Space)">
+                        <span id="playIcon">▶</span>
+                    </button>
+                    <span class="time-display" id="currentTimeDisplay">00:00</span>
+                    <div class="progress-bar-container" id="timelineBar">
+                        <div class="progress-bar-bg"></div>
+                        <div class="progress-bar-fill" id="timelineFill"></div>
+                        <div class="progress-bar-handle" id="timelineThumb"></div>
+                    </div>
+                    <span class="time-display" id="totalDurationDisplay">00:00</span>
+                    <button class="ctrl-btn" id="btnMuteToggle" title="Bật/Tắt âm thanh">
+                        <span id="muteIcon">🔊</span>
+                    </button>
+                </div>
+
+                <!-- Bottom Media Strip Tray (Always-Visible Timeline Sequence) -->
+                <div class="media-strip-tray" id="mediaStripTray">
+                    <div class="tray-header">
+                        <span class="tray-title"><i class="tray-icon">🎞️</i> Thứ tự video ghép nối (<span id="trayClipCount">0 clip</span>)</span>
+                        <span class="tray-hint">Bấm vào clip để chuyển xem trước ngay lập tức</span>
+                    </div>
+                    <div class="media-strip-list" id="mediaStripList">
+                        <!-- Sequence cards injected dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Text & Badge Style Controls -->
+            <aside class="panel right-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="title-icon">✍️</span> Tùy Chỉnh Chữ CapCut
+                    </div>
+                    <div class="badge-count-pill" id="badgeLayerCount">Lớp 1</div>
+                </div>
+
+                <!-- Text Customization Form -->
+                <div class="sidebar-scrollable">
+                    <!-- Show / Hide Text Overlay -->
+                    <div class="control-card">
+                        <div class="card-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>👁️ Hiển thị chữ trên video</span>
+                            <label class="switch-mini" title="Tắt để ẩn chữ trên video xem trước và khi xuất file">
+                                <input type="checkbox" id="checkShowText" checked>
+                                <span class="switch-mini-text">Bật / Tắt</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Text Content -->
+                    <div class="control-card">
+                        <label class="control-label" for="inputText">
+                            <span>Nội dung chữ</span>
+                            <span class="label-hint">Hỗ trợ xuống dòng</span>
+                        </label>
+                        <textarea id="inputText" class="form-textarea" rows="3" placeholder="Nhập nội dung chữ cần hiển thị...">helo helo</textarea>
+                        <div class="template-tag-hint">
+                            <span>💡 <b>Mẹo:</b> Gõ <code>{index}</code> hoặc <code>{part}</code> để tự động đánh số thứ tự khi ghép hàng loạt (VD: "Tập {index}" ➔ Tập 1, Tập 2...).</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick Style Presets -->
+                    <div class="control-card">
+                        <label class="control-label">Mẫu nhanh (Presets CapCut)</label>
+                        <div class="preset-buttons-row">
+                            <button class="preset-btn active" data-preset="capcut-white">
+                                <span class="preset-color-sample white-sample">Aa</span> Nền Trắng
+                            </button>
+                            <button class="preset-btn" data-preset="capcut-black">
+                                <span class="preset-color-sample black-sample">Aa</span> Nền Đen
+                            </button>
+                            <button class="preset-btn" data-preset="capcut-yellow">
+                                <span class="preset-color-sample yellow-sample">Aa</span> Vàng Hot
+                            </button>
+                            <button class="preset-btn" data-preset="capcut-red">
+                                <span class="preset-color-sample red-sample">Aa</span> Đỏ Nổi
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Position Controls (Tọa độ X & Y % Tự Do) -->
+                    <div class="control-card">
+                        <div class="card-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>📍 Vị Trí Chữ (Tọa độ X & Y)</span>
+                            <label class="switch-mini" title="Bật/Tắt kéo thả trực tiếp trên màn hình video">
+                                <input type="checkbox" id="checkEnableDrag" checked>
+                                <span class="switch-mini-text">Kéo trên video</span>
+                            </label>
+                        </div>
+
+                        <!-- Position X -->
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderPosX">Vị trí Ngang X (%)</label>
+                                <div class="coord-input-box">
+                                    <input type="number" id="inputPosX" class="coord-number-input" min="0" max="100" step="1" value="50">
+                                    <span class="coord-unit">%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="sliderPosX" class="form-slider" min="0" max="100" value="50">
+                        </div>
+
+                        <!-- Position Y -->
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderPosY">Vị trí Dọc Y (%)</label>
+                                <div class="coord-input-box">
+                                    <input type="number" id="inputPosY" class="coord-number-input" min="0" max="100" step="1" value="80">
+                                    <span class="coord-unit">%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="sliderPosY" class="form-slider" min="0" max="100" value="80">
+                        </div>
+
+                        <!-- Quick Position Presets -->
+                        <div class="quick-pos-grid">
+                            <button type="button" class="btn-pos-preset" id="btnPosTop" title="Đặt lên phía trên video">
+                                ⬆️ Trên (Y: 15%)
+                            </button>
+                            <button type="button" class="btn-pos-preset" id="btnPosCenter" title="Đặt chính giữa khung hình">
+                                🎯 Giữa (50%, 50%)
+                            </button>
+                            <button type="button" class="btn-pos-preset" id="btnPosBottom" title="Đặt dưới chuẩn CapCut">
+                                ⬇️ Dưới (Y: 80%)
+                            </button>
+                            <button type="button" class="btn-pos-preset" id="btnPosCenterX" title="Căn thẳng trục giữa ngang">
+                                ↔️ Căn giữa X (50%)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Typography -->
+                    <div class="control-card">
+                        <div class="card-section-title">Kiểu chữ & Cỡ chữ</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="selectFont">Phông chữ (Hỗ trợ tiếng Việt 100%)</label>
+                            <select id="selectFont" class="form-select">
+                                <option value="BeVietnamPro" selected>Be Vietnam Pro (Chuẩn Tik Tok / CapCut)</option>
+                                <option value="Montserrat">Montserrat (Hiện đại & Khỏe khoắn)</option>
+                                <option value="Arial">Arial Bold (Kinh điển nét đậm)</option>
+                                <option value="SegoeUI">Segoe UI Bold (Giao diện Windows)</option>
+                                <option value="Times">Times New Roman (Cổ điển có chân)</option>
+                            </select>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderFontSize">Cỡ chữ (Font Size)</label>
+                                <span class="slider-value" id="valFontSize">42 px</span>
+                            </div>
+                            <input type="range" id="sliderFontSize" class="form-slider" min="18" max="100" value="42">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Căn lề chữ (Alignment)</label>
+                            <div class="btn-group-toggle">
+                                <button class="toggle-btn" data-align="left" title="Căn trái">Trái</button>
+                                <button class="toggle-btn active" data-align="center" title="Căn giữa">Giữa</button>
+                                <button class="toggle-btn" data-align="right" title="Căn phải">Phải</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Badge Background & Colors -->
+                    <div class="control-card">
+                        <div class="card-section-title">Màu sắc & Khung nền trắng</div>
+
+                        <div class="color-rows-grid">
+                            <div class="color-picker-item">
+                                <label for="inputBgColor">Màu nền</label>
+                                <div class="color-input-wrapper">
+                                    <input type="color" id="inputBgColor" value="#FFFFFF">
+                                    <span class="color-hex-label" id="valBgColor">#FFFFFF</span>
+                                </div>
+                            </div>
+                            <div class="color-picker-item">
+                                <label for="inputTextColor">Màu chữ</label>
+                                <div class="color-input-wrapper">
+                                    <input type="color" id="inputTextColor" value="#000000">
+                                    <span class="color-hex-label" id="valTextColor">#000000</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderBgOpacity">Độ mờ đục nền (Opacity)</label>
+                                <span class="slider-value" id="valBgOpacity">100%</span>
+                            </div>
+                            <input type="range" id="sliderBgOpacity" class="form-slider" min="0" max="100" value="100">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderBorderRadius">Bo góc nền (Border Radius)</label>
+                                <span class="slider-value" id="valBorderRadius">14 px</span>
+                            </div>
+                            <input type="range" id="sliderBorderRadius" class="form-slider" min="0" max="40" value="14">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderPadX">Khoảng cách đệm ngang (Pad X)</label>
+                                <span class="slider-value" id="valPadX">26 px</span>
+                            </div>
+                            <input type="range" id="sliderPadX" class="form-slider" min="8" max="60" value="26">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderPadY">Khoảng cách đệm dọc (Pad Y)</label>
+                                <span class="slider-value" id="valPadY">14 px</span>
+                            </div>
+                            <input type="range" id="sliderPadY" class="form-slider" min="4" max="40" value="14">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label for="sliderMaxWidth">Độ rộng tối đa (%)</label>
+                                <span class="slider-value" id="valMaxWidth">85%</span>
+                            </div>
+                            <input type="range" id="sliderMaxWidth" class="form-slider" min="30" max="100" value="85">
+                        </div>
+
+                        <div class="toggle-row">
+                            <label for="checkShadow" class="toggle-label">Đổ bóng viền nền (Shadow sticker)</label>
+                            <input type="checkbox" id="checkShadow" class="form-toggle" checked>
+                        </div>
+                    </div>
+
+                    <!-- Timing & Visibility -->
+                    <div class="control-card">
+                        <div class="card-section-title">Thời gian hiển thị chữ</div>
+                        
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="timingMode" value="full" checked>
+                                <span>Hiển thị xuyên suốt toàn bộ video</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="timingMode" value="custom">
+                                <span>Khoảng thời gian cụ thể (Từ giây ... đến giây ...)</span>
+                            </label>
+                        </div>
+
+                        <div class="timing-custom-fields" id="timingCustomFields" style="display: none;">
+                            <div class="time-input-row">
+                                <div class="form-group">
+                                    <label for="inputStartTime">Bắt đầu (giây)</label>
+                                    <div class="input-with-action">
+                                        <input type="number" id="inputStartTime" class="form-input" min="0" step="0.1" value="0.0">
+                                        <button class="btn-micro" id="btnSetStartCurrent" title="Lấy mốc thời gian hiện tại">⏱️</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputEndTime">Kết thúc (giây)</label>
+                                    <div class="input-with-action">
+                                        <input type="number" id="inputEndTime" class="form-input" min="0" step="0.1" value="10.0">
+                                        <button class="btn-micro" id="btnSetEndCurrent" title="Lấy mốc thời gian hiện tại">⏱️</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Video Import Progress Modal (Hiển thị tiến trình thêm X/Y video) -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal-card import-modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>📥 Đang Nhập Video Vào Danh Sách</span>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="import-dialog-content">
+                    <div class="import-stats-row">
+                        <span class="import-count-tag" id="importCountTag">Đang xử lý 1 / 1 video</span>
+                        <span class="import-percent-tag" id="importPercentTag">0%</span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="import-progress-bar-wrap">
+                        <div class="import-progress-fill" id="importProgressFill" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- Current Processing File Details -->
+                    <div class="import-current-file">
+                        <span class="import-file-icon">🎬</span>
+                        <div class="import-file-meta">
+                            <div class="import-filename" id="importCurrentFilename">video_sample.mp4</div>
+                            <div class="import-file-status" id="importStatusText">Đang phân tích khung hình & tạo ảnh đại diện...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export & Progress Modal -->
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">🚀 Đang Xuất Video</div>
+                <button class="modal-close" id="btnModalClose">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- In Progress State -->
+                <div class="modal-progress-view" id="modalProgressView">
+                    <div class="circular-progress">
+                        <svg class="progress-ring" width="120" height="120">
+                            <circle class="progress-ring-circle-bg" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
+                            <circle class="progress-ring-circle" id="progressCircle" stroke="#00f2fe" stroke-width="8" stroke-dasharray="326.72" stroke-dashoffset="326.72" stroke-linecap="round" fill="transparent" r="52" cx="60" cy="60"/>
+                        </svg>
+                        <div class="progress-percentage" id="progressPercentage">0%</div>
+                    </div>
+                    <div class="progress-message" id="progressMessage">Đang chuẩn bị ghép video...</div>
+                    <div class="progress-subhint">Quá trình diễn ra tự động với công nghệ FFmpeg tốc độ cao</div>
+                </div>
+
+                <!-- Finished State -->
+                <div class="modal-finished-view" id="modalFinishedView" style="display: none;">
+                    <div class="finished-success-badge" id="finishedBadgeText">✅ Xuất video thành công!</div>
+                    
+                    <!-- Player for previewing output -->
+                    <div class="finished-preview-container">
+                        <video id="finishedVideoPlayer" controls playsinline></video>
+                    </div>
+
+                    <!-- Single Output Open File Button -->
+                    <div class="finished-single-actions" id="singleFinishedActions">
+                        <button type="button" class="btn btn-primary btn-block" id="btnOpenSingleFile">
+                            <span>📁 Mở File Video Trong Thư Mục (Explorer)</span>
+                        </button>
+                    </div>
+
+                    <!-- Batch Outputs List (Visible when batch merge finished) -->
+                    <div class="batch-outputs-container" id="batchOutputsContainer" style="display: none;">
+                        <div class="batch-list-header">
+                            <span>Danh sách video đã xuất:</span>
+                            <span class="batch-total-tag" id="batchOutputCountTag">0 video</span>
+                        </div>
+                        <div class="batch-outputs-list" id="batchOutputsList">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <div class="finished-actions">
+                        <button class="btn btn-secondary btn-block" id="btnOpenFinishedFolder">
+                            <span>📁 Mở Thư Mục Chứa Tất Cả File (Explorer)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Webhook API Server Modal -->
+    <div class="modal-overlay" id="webhookModal">
+        <div class="modal-card" style="max-width: 720px; width: 95%;">
+            <div class="modal-header">
+                <div class="modal-title">🔌 Máy Chủ Webhook API (Tự Động Hóa Video)</div>
+                <button class="modal-close" id="btnWebhookModalClose">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: left; gap: 14px; display: flex; flex-direction: column;">
+                <div class="settings-card" style="margin-bottom: 0;">
+                    <div class="settings-card-header" style="justify-content: space-between;">
+                        <span class="settings-card-title">🌐 Điều Khiển Server</span>
+                        <span id="webhookStatusBadge" style="font-size: 12px; font-weight: 700; color: #22c55e;">● API đang bật</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="webhookBaseUrl" class="form-input" readonly value="http://127.0.0.1:8765" style="flex: 1; min-width: 220px;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnCopyWebhookUrl">📋 Sao chép URL</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnToggleWebhook">Tạm tắt API</button>
+                    </div>
+                </div>
+
+                <div class="settings-card" style="margin-bottom: 0;">
+                    <div class="settings-card-header">
+                        <span class="settings-card-title">🔑 Khóa API (Header: X-API-Key)</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="webhookApiKey" class="form-input" readonly style="flex: 1; min-width: 240px; font-family: monospace;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnCopyApiKey">📋 Sao chép</button>
+                        <button type="button" class="btn btn-accent btn-sm" id="btnRegenApiKey">🔄 Tạo mới</button>
+                    </div>
+                </div>
+
+                <div class="settings-card" style="margin-bottom: 0;">
+                    <div class="settings-card-header" style="justify-content: space-between;">
+                        <span class="settings-card-title">💾 Lưu Trữ Kết Quả (outputs/)</span>
+                        <span id="webhookStorageInfo" style="font-size: 12px; color: var(--text-muted);">0 file · 0 MB</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnRefreshWebhookInfo">🔄 Làm mới</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnCleanupOldOutputs">🧹 Xóa file cũ (&gt;24h)</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnOpenWebhookDocs" style="margin-left: auto;">📖 Mở Tài Liệu API</button>
+                    </div>
+                </div>
+
+                <div class="label-hint" style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 8px; line-height: 1.55;">
+                    <b>Cách tích hợp n8n / Make / Python / AI Agent:</b><br>
+                    1. Gửi <code>POST /api/v1/video/edit</code> kèm header <code>X-API-Key</code> → nhận về <code>task_id</code>.<br>
+                    2. Poll <code>GET /api/v1/status/{task_id}</code> (hoặc truyền <code>webhook_url</code> để nhận kết quả tự động).<br>
+                    3. Tải video tại <code>GET /api/v1/result/{task_id}?download=1</code> (chạy ngầm không cần UI: <code>--headless --port 8765</code>).
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
