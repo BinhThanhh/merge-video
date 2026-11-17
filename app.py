@@ -11,6 +11,8 @@ import subprocess
 import shutil
 import queue
 import secrets
+import hashlib
+import hmac
 import urllib.request
 import argparse
 import webbrowser
@@ -126,30 +128,74 @@ api_job_queue = queue.Queue()
 _api_worker_started = False
 
 
+def _hash_api_key(raw_key, salt):
+    """Hash API key with SHA-256 + per-key salt so raw secret is never stored on disk."""
+    return hashlib.sha256(f"{salt}:{raw_key}".encode("utf-8")).hexdigest()
+
+
+def _mask_api_key(raw_key):
+    """Return a masked preview of an API key (e.g., mvt_a1b2••••••••c3d4)."""
+    if len(raw_key) <= 12:
+        return "••••••••"
+    return f"{raw_key[:8]}••••••••••••••••{raw_key[-4:]}"
+
+
+def _generate_key_fields():
+    raw_key = f"mvt_{secrets.token_hex(20)}"
+    salt = secrets.token_hex(16)
+    return raw_key, {
+        "api_key_salt": salt,
+        "api_key_hash": _hash_api_key(raw_key, salt),
+        "api_key_preview": _mask_api_key(raw_key),
+    }
+
+
 def load_api_config():
-    """Load or initialize persistent Webhook API configuration."""
+    """Load or initialize persistent Webhook API configuration (stores only salted SHA-256 hash)."""
     with api_config_lock:
-        default_cfg = {
-            "api_enabled": True,
-            "api_key": f"mvt_{secrets.token_hex(20)}",
-            "port": 8765,
-            "retention_hours": 0,
-        }
+        data = None
         if API_CONFIG_PATH.exists():
             try:
                 with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                for k, v in default_cfg.items():
-                    data.setdefault(k, v)
-                return data
+            except Exception:
+                data = None
+
+        changed = False
+        if not isinstance(data, dict):
+            _, key_fields = _generate_key_fields()
+            data = {
+                "api_enabled": True,
+                "port": 8765,
+                "retention_hours": 0,
+                **key_fields,
+            }
+            changed = True
+        else:
+            data.setdefault("api_enabled", True)
+            data.setdefault("port", 8765)
+            data.setdefault("retention_hours", 0)
+            # Migrate legacy plaintext api_key to salted SHA-256 hash
+            if "api_key" in data:
+                legacy_key = data.pop("api_key")
+                if legacy_key and not data.get("api_key_hash"):
+                    salt = secrets.token_hex(16)
+                    data["api_key_salt"] = salt
+                    data["api_key_hash"] = _hash_api_key(legacy_key, salt)
+                    data["api_key_preview"] = _mask_api_key(legacy_key)
+                changed = True
+            if not data.get("api_key_hash") or not data.get("api_key_salt"):
+                _, key_fields = _generate_key_fields()
+                data.update(key_fields)
+                changed = True
+
+        if changed:
+            try:
+                with open(API_CONFIG_PATH, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
             except Exception:
                 pass
-        try:
-            with open(API_CONFIG_PATH, "w", encoding="utf-8") as f:
-                json.dump(default_cfg, f, indent=2)
-        except Exception:
-            pass
-        return default_cfg
+        return data
 
 
 def save_api_config(cfg):
@@ -182,7 +228,9 @@ def require_api_key(fn):
             or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             or request.args.get("api_key", "")
         )
-        if not provided or not secrets.compare_digest(provided, cfg.get("api_key", "")):
+        salt = cfg.get("api_key_salt", "")
+        expected_hash = cfg.get("api_key_hash", "")
+        if not provided or not expected_hash or not hmac.compare_digest(_hash_api_key(provided, salt), expected_hash):
             return jsonify({"error": "Invalid or missing X-API-Key"}), 401
         return fn(*args, **kwargs)
     return wrapper
@@ -1425,6 +1473,7 @@ def ensure_api_worker():
 def webhook_config_route():
     """Internal UI endpoint to view or update Webhook API settings."""
     cfg = load_api_config()
+    new_raw_key = None
     if request.method == "POST":
         data = request.json or {}
         if "api_enabled" in data:
@@ -1435,12 +1484,14 @@ def webhook_config_route():
             except (TypeError, ValueError):
                 pass
         if data.get("regenerate_key"):
-            cfg["api_key"] = f"mvt_{secrets.token_hex(20)}"
+            new_raw_key, key_fields = _generate_key_fields()
+            cfg.update(key_fields)
         save_api_config(cfg)
 
     return jsonify({
         "api_enabled": cfg.get("api_enabled", True),
-        "api_key": cfg.get("api_key", ""),
+        "api_key_preview": cfg.get("api_key_preview", "••••••••"),
+        "new_api_key": new_raw_key,
         "port": SERVER_PORT,
         "base_url": f"http://127.0.0.1:{SERVER_PORT}",
         "retention_hours": cfg.get("retention_hours", 0),
@@ -1484,9 +1535,22 @@ def api_v1_video_edit():
     """Queue an automated video edit job (merge, trim, text overlays, speed, volume, upscale)."""
     ensure_api_worker()
     data = request.json or {}
-    raw_clips = data.get("clips", [])
+    raw_clips = list(data.get("clips", []) or [])
+    folder = str(data.get("folder") or data.get("input_dir") or "").strip()
+    if folder:
+        folder_path = Path(folder)
+        if not folder_path.is_dir():
+            return jsonify({"error": f"Folder not found: {folder}"}), 400
+        video_exts = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+        glob_fn = folder_path.rglob if data.get("recursive") else folder_path.glob
+        found = sorted(
+            [p for p in glob_fn("*") if p.is_file() and p.suffix.lower() in video_exts],
+            key=lambda p: p.name.lower(),
+        )
+        raw_clips.extend(str(p) for p in found)
+
     if not raw_clips or not isinstance(raw_clips, list):
-        return jsonify({"error": "Field 'clips' must be a non-empty array of paths, URLs, or objects"}), 400
+        return jsonify({"error": "Provide 'clips' (non-empty array) or 'folder' containing videos"}), 400
 
     try:
         volume = max(0.0, min(5.0, float(data.get("volume", 1.0))))
@@ -1645,6 +1709,7 @@ pre{{padding:14px;overflow:auto}} .tag{{display:inline-block;background:#0ea5e9;
 <h2>3. Tham số hỗ trợ</h2>
 <ul>
   <li><b>clips</b>: Mảng đường dẫn local hoặc URL <code>http(s)://</code>, hoặc object <code>{{"source", "trim_start", "trim_end"}}</code></li>
+  <li><b>folder</b> (hoặc <b>input_dir</b>): Đường dẫn thư mục chứa video raw — tự quét toàn bộ file video (thêm <code>"recursive": true</code> để quét cả thư mục con)</li>
   <li><b>width / height</b>: Kích thước xuất (mặc định <code>0</code> = giữ theo video đầu hoặc <code>canvas_mode</code>)</li>
   <li><b>fit_mode</b>: <code>contain</code> | <code>cover</code> | <code>stretch</code></li>
   <li><b>speed</b>: <code>0.25</code> → <code>4.0</code> (mặc định <code>1.0</code>)</li>
@@ -1662,6 +1727,69 @@ def run_flask_server(port, host="127.0.0.1"):
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
     app.run(host=host, port=port, debug=False, threaded=True)
+
+
+def create_tray_icon_image():
+    """Generate a crisp 64x64 system tray icon using Pillow."""
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([2, 2, 62, 62], radius=14, fill=(14, 165, 233, 255))
+    d.polygon([(24, 18), (24, 46), (48, 32)], fill=(255, 255, 255, 255))
+    return img
+
+
+def setup_system_tray(window, host, port):
+    """Minimize window to Windows system tray on close (X) so Webhook API stays alive."""
+    try:
+        import pystray
+    except Exception:
+        return
+
+    state_tray = {"allow_quit": False, "icon": None}
+
+    def show_window(icon=None, item=None):
+        try:
+            window.show()
+            window.restore()
+        except Exception:
+            pass
+
+    def open_docs(icon=None, item=None):
+        webbrowser.open(f"http://{host}:{port}/api/v1/docs")
+
+    def quit_app(icon=None, item=None):
+        state_tray["allow_quit"] = True
+        try:
+            if state_tray["icon"]:
+                state_tray["icon"].stop()
+        except Exception:
+            pass
+        try:
+            window.destroy()
+        except Exception:
+            pass
+        os._exit(0)
+
+    def on_closing():
+        if state_tray["allow_quit"]:
+            return True
+        try:
+            window.hide()
+        except Exception:
+            pass
+        return False  # Cancel close -> stay running in system tray
+
+    window.events.closing += on_closing
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Mở giao diện MergeVideoTool", show_window, default=True),
+        pystray.MenuItem(f"Mở API Docs (:{port})", open_docs),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Thoát hẳn (Dừng API)", quit_app),
+    )
+    tray_icon = pystray.Icon("MergeVideoTool", create_tray_icon_image(), f"MergeVideoTool (API :{port})", menu)
+    state_tray["icon"] = tray_icon
+    threading.Thread(target=tray_icon.run, daemon=True).start()
 
 
 if __name__ == "__main__":
@@ -1713,6 +1841,7 @@ if __name__ == "__main__":
                 min_size=(1080, 700),
                 background_color="#0b0f19"
             )
+            setup_system_tray(window, args.host, port)
             webview.start(debug=False)
         except Exception as e:
             print(f"Native window failed: {e}. Opening browser fallback...")

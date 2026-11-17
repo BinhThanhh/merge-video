@@ -5,8 +5,7 @@ datas = [
     ('static', 'static'),
     ('templates', 'templates'),
     ('ffmpeg.exe', '.'),
-    ('realesrgan', 'realesrgan'),
-    ('obf_build/pyarmor_runtime_000000', 'pyarmor_runtime_000000')
+    ('realesrgan', 'realesrgan')
 ]
 binaries = []
 hiddenimports = [
@@ -23,6 +22,7 @@ hiddenimports = [
     'PIL.ImageFont',
     'imageio_ffmpeg',
     'webview',
+    'pystray',
     'pythonnet',
     'clr_loader',
     'clr',
@@ -51,6 +51,7 @@ packages_to_collect = [
     'PIL',
     'imageio_ffmpeg',
     'webview',
+    'pystray',
     'pythonnet',
     'clr_loader'
 ]
@@ -62,8 +63,8 @@ for pkg in packages_to_collect:
     hiddenimports += tmp_ret[2]
 
 a = Analysis(
-    ['obf_build/app.py'],
-    pathex=['obf_build', '.'],
+    ['app.py'],
+    pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

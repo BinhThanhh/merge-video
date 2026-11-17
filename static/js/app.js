@@ -1535,6 +1535,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnCopyWebhookUrl = document.getElementById("btnCopyWebhookUrl");
     const btnToggleWebhook = document.getElementById("btnToggleWebhook");
     const webhookApiKey = document.getElementById("webhookApiKey");
+    const webhookKeyHint = document.getElementById("webhookKeyHint");
     const btnCopyApiKey = document.getElementById("btnCopyApiKey");
     const btnRegenApiKey = document.getElementById("btnRegenApiKey");
     const webhookStorageInfo = document.getElementById("webhookStorageInfo");
@@ -1542,6 +1543,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnCleanupOldOutputs = document.getElementById("btnCleanupOldOutputs");
     const btnOpenWebhookDocs = document.getElementById("btnOpenWebhookDocs");
     let currentWebhookEnabled = true;
+    let lastRawApiKey = "";
 
     async function loadWebhookConfig(postBody = null) {
         try {
@@ -1553,7 +1555,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const cfg = await resp.json();
             currentWebhookEnabled = !!cfg.api_enabled;
             if (webhookBaseUrl) webhookBaseUrl.value = cfg.base_url || "";
-            if (webhookApiKey) webhookApiKey.value = cfg.api_key || "";
+            if (cfg.new_api_key) {
+                lastRawApiKey = cfg.new_api_key;
+                if (webhookApiKey) webhookApiKey.value = cfg.new_api_key;
+                if (webhookKeyHint) webhookKeyHint.innerHTML = "✅ <b>Đã tạo API Key mới!</b> Hãy bấm <b>Sao chép</b> ngay (lần sau mở lại app khóa sẽ được che bảo mật).";
+            } else if (webhookApiKey) {
+                webhookApiKey.value = lastRawApiKey || cfg.api_key_preview || "";
+            }
             if (webhookStatusBadge) {
                 webhookStatusBadge.textContent = currentWebhookEnabled ? "● API đang bật" : "○ API đang tắt";
                 webhookStatusBadge.style.color = currentWebhookEnabled ? "#22c55e" : "#f87171";
@@ -1586,7 +1594,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (btnCopyApiKey && webhookApiKey) {
         btnCopyApiKey.addEventListener("click", () => {
-            navigator.clipboard.writeText(webhookApiKey.value);
+            if (!lastRawApiKey && webhookApiKey.value.includes("••••")) {
+                showToast("Khóa cũ đã được mã hóa che bớt — hãy bấm 'Tạo API Key riêng' để lấy khóa mới!", "info");
+                return;
+            }
+            navigator.clipboard.writeText(lastRawApiKey || webhookApiKey.value);
             showToast("Đã sao chép X-API-Key", "success");
         });
     }

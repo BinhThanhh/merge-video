@@ -696,13 +696,14 @@
 
                 <div class="settings-card" style="margin-bottom: 0;">
                     <div class="settings-card-header">
-                        <span class="settings-card-title">🔑 Khóa API (Header: X-API-Key)</span>
+                        <span class="settings-card-title">🔑 Khóa API (Header: X-API-Key · Mã hóa SHA-256)</span>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <input type="text" id="webhookApiKey" class="form-input" readonly style="flex: 1; min-width: 240px; font-family: monospace;">
+                        <input type="text" id="webhookApiKey" class="form-input" readonly placeholder="Bấm 'Tạo API Key riêng' để lấy khóa mới" style="flex: 1; min-width: 240px; font-family: monospace;">
                         <button type="button" class="btn btn-secondary btn-sm" id="btnCopyApiKey">📋 Sao chép</button>
-                        <button type="button" class="btn btn-accent btn-sm" id="btnRegenApiKey">🔄 Tạo mới</button>
+                        <button type="button" class="btn btn-accent btn-sm" id="btnRegenApiKey">🔑 Tạo API Key riêng</button>
                     </div>
+                    <span class="label-hint" id="webhookKeyHint" style="margin-top: 6px; display: block;">Khóa được băm SHA-256 + Salt khi lưu trên máy. Bấm <b>Tạo API Key riêng</b> để sinh khóa mới và sao chép ngay.</span>
                 </div>
 
                 <div class="settings-card" style="margin-bottom: 0;">
